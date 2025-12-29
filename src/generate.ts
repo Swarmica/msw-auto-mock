@@ -1,242 +1,247 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import * as fs from "node:fs"
+import * as path from "node:path"
 
-import ApiGenerator, { isReference } from 'oazapfts/generate';
-import { OpenAPIV3 } from 'openapi-types';
-import camelCase from 'lodash/camelCase';
-import { cosmiconfig } from 'cosmiconfig';
+import ApiGenerator, { isReference } from "oazapfts/generate"
+import { OpenAPIV3 } from "openapi-types"
+import camelCase from "lodash/camelCase"
+import { cosmiconfig } from "cosmiconfig"
 
-import { getV3Doc } from './swagger';
-import { prettify, toExpressLikePath } from './utils';
-import { Operation } from './transform';
-import { browserIntegration, mockTemplate, nodeIntegration, reactNativeIntegration } from './template';
-import { CliOptions, ConfigOptions } from './types';
-import { name as moduleName } from '../package.json';
+import { getV3Doc } from "./swagger"
+import { prettify, toExpressLikePath } from "./utils"
+import { Operation } from "./transform"
+import { mockTemplate, nodeIntegration } from "./template"
+import { CliOptions, ConfigOptions } from "./types"
+import { name as moduleName } from "../package.json"
 
 export function generateOperationCollection(apiDoc: OpenAPIV3.Document, options: CliOptions) {
-  const apiGen = new ApiGenerator(apiDoc, {});
-  const operationDefinitions = getOperationDefinitions(apiDoc);
+  const apiGen = new ApiGenerator(apiDoc, {})
+  const operationDefinitions = getOperationDefinitions(apiDoc)
 
   return operationDefinitions
     .filter(op => operationFilter(op, options))
     .map(op => codeFilter(op, options))
-    .map(definition => toOperation(definition, apiGen));
+    .map(definition => toOperation(definition, apiGen))
 }
 
 export async function generate(spec: string, inlineOptions: CliOptions) {
-  const explorer = cosmiconfig(moduleName);
-  const finalOptions: ConfigOptions = { ...inlineOptions };
+  const explorer = cosmiconfig(moduleName)
+  const finalOptions: ConfigOptions = { ...inlineOptions }
 
   try {
-    const result = await explorer.search();
+    const result = await explorer.search()
     if (!result?.isEmpty) {
-      Object.assign(finalOptions, result?.config);
+      Object.assign(finalOptions, result?.config)
     }
   } catch (e) {
-    console.log(e);
-    process.exit(1);
+    console.log(e)
+    process.exit(1)
   }
 
-  const { output: outputFolder } = finalOptions;
-  const targetFolder = path.resolve(process.cwd(), outputFolder);
+  const { output: outputFolder } = finalOptions
+  const targetFolder = path.resolve(process.cwd(), outputFolder)
 
-  const fileExt = finalOptions.typescript ? '.ts' : '.js';
+  const fileExt = finalOptions.typescript ? ".ts" : ".js"
 
-  let code: string;
-  const apiDoc = await getV3Doc(spec);
-  const operationCollection = generateOperationCollection(apiDoc, finalOptions);
+  let code: string
+  const apiDoc = await getV3Doc(spec)
+  const operationCollection = generateOperationCollection(apiDoc, finalOptions)
 
-  let baseURL = '';
+  let baseURL = ""
   if (finalOptions.baseUrl === true) {
-    baseURL = getServerUrl(apiDoc);
-  } else if (typeof finalOptions.baseUrl === 'string') {
-    baseURL = finalOptions.baseUrl;
+    baseURL = getServerUrl(apiDoc)
+  } else if (typeof finalOptions.baseUrl === "string") {
+    baseURL = finalOptions.baseUrl
   }
 
-  code = mockTemplate(operationCollection, baseURL, finalOptions);
+  code = mockTemplate(operationCollection, baseURL, finalOptions)
 
   try {
-    fs.mkdirSync(targetFolder);
+    fs.mkdirSync(targetFolder)
   } catch {}
 
-  fs.writeFileSync(path.resolve(process.cwd(), targetFolder, `native${fileExt}`), reactNativeIntegration);
-  fs.writeFileSync(path.resolve(process.cwd(), targetFolder, `node${fileExt}`), nodeIntegration);
-  fs.writeFileSync(path.resolve(process.cwd(), targetFolder, `browser${fileExt}`), browserIntegration);
+  fs.writeFileSync(path.resolve(process.cwd(), targetFolder, `node${fileExt}`), nodeIntegration)
   fs.writeFileSync(
     path.resolve(process.cwd(), targetFolder, `handlers${fileExt}`),
     await prettify(`handlers${fileExt}`, code),
-  );
+  )
 }
 
 function getServerUrl(apiDoc: OpenAPIV3.Document) {
-  let server = apiDoc.servers?.at(0);
-  let url = '';
+  let server = apiDoc.servers?.at(0)
+  let url = ""
   if (server) {
-    url = server.url;
+    url = server.url
   }
   if (server?.variables) {
     Object.entries(server.variables).forEach(([key, value]) => {
-      url = url.replace(`{${key}}`, value.default);
-    });
+      url = url.replace(`{${key}}`, value.default)
+    })
   }
 
-  return url;
+  return url
 }
 
-const operationKeys = Object.values(OpenAPIV3.HttpMethods) as OpenAPIV3.HttpMethods[];
+const operationKeys = Object.values(OpenAPIV3.HttpMethods) as OpenAPIV3.HttpMethods[]
 
 type OperationDefinition = {
-  path: string;
-  verb: string;
-  responses: OpenAPIV3.ResponsesObject;
-  id: string;
-};
+  path: string
+  verb: string
+  responses: OpenAPIV3.ResponsesObject
+  id: string
+}
 
 function getOperationDefinitions(v3Doc: OpenAPIV3.Document): OperationDefinition[] {
   return Object.entries(v3Doc.paths).flatMap(([path, pathItem]) =>
     !pathItem
       ? []
       : Object.entries(pathItem)
-          .filter((arg): arg is [string, OpenAPIV3.OperationObject] => operationKeys.includes(arg[0] as any))
+          .filter((arg): arg is [string, OpenAPIV3.OperationObject] =>
+            operationKeys.includes(arg[0] as any),
+          )
           .map(([verb, operation]) => {
-            const id = camelCase(operation.operationId ?? verb + '/' + path);
+            const id = camelCase(operation.operationId ?? verb + "/" + path)
             return {
               path,
               verb,
               id,
               responses: operation.responses,
-            };
+            }
           }),
-  );
+  )
 }
 
 function operationFilter(operation: OperationDefinition, options: CliOptions): boolean {
-  const includes = options?.includes?.split(',') ?? null;
-  const excludes = options?.excludes?.split(',') ?? null;
+  const includes = options?.includes?.split(",") ?? null
+  const excludes = options?.excludes?.split(",") ?? null
 
   if (includes && !includes.includes(operation.path)) {
-    return false;
+    return false
   }
   if (excludes?.includes(operation.path)) {
-    return false;
+    return false
   }
-  return true;
+  return true
 }
 
 function codeFilter(operation: OperationDefinition, options: CliOptions): OperationDefinition {
-  const rawCodes = options?.codes;
+  const rawCodes = options?.codes
 
-  const codes = rawCodes ? (rawCodes.indexOf(',') !== -1 ? rawCodes?.split(',') : [rawCodes]) : null;
+  const codes = rawCodes ? (rawCodes.indexOf(",") !== -1 ? rawCodes?.split(",") : [rawCodes]) : null
 
   const responses = Object.entries(operation.responses)
     .filter(([code]) => {
       if (codes && !codes.includes(code)) {
-        return false;
+        return false
       }
-      return true;
+      return true
     })
     .map(([code, response]) => ({
       [code]: response,
     }))
-    .reduce((acc, curr) => Object.assign(acc, curr), {} as OpenAPIV3.ResponsesObject);
+    .reduce((acc, curr) => Object.assign(acc, curr), {} as OpenAPIV3.ResponsesObject)
 
   return {
     ...operation,
     responses,
-  };
+  }
 }
 
 function toOperation(definition: OperationDefinition, apiGen: ApiGenerator): Operation {
-  const { verb, path, responses, id } = definition;
+  const { verb, path, responses, id } = definition
 
   const responseMap = Object.entries(responses).map(([code, response]) => {
-    const content = apiGen.resolve(response).content;
+    const content = apiGen.resolve(response).content
     if (!content) {
-      return { code, id: '', responses: {} };
+      return { code, id: "", responses: {} }
     }
 
     const resolvedResponse = Object.keys(content).reduce(
       (resolved, type) => {
-        const schema = content[type].schema;
-        if (typeof schema !== 'undefined') {
-          resolved[type] = recursiveResolveSchema(schema, apiGen);
+        const schema = content[type].schema
+        if (typeof schema !== "undefined") {
+          resolved[type] = recursiveResolveSchema(schema, apiGen)
         }
 
-        return resolved;
+        return resolved
       },
       {} as Record<string, OpenAPIV3.SchemaObject>,
-    );
+    )
 
     return {
       code,
       id,
       responses: resolvedResponse,
-    };
-  });
+    }
+  })
 
   return {
     verb,
     path: toExpressLikePath(path),
     response: responseMap,
-  };
+  }
 }
 
-const resolvingRefs: string[] = [];
+const resolvingRefs: string[] = []
 
 function autoPopRefs<T>(cb: () => T) {
-  const n = resolvingRefs.length;
-  const res = cb();
-  resolvingRefs.length = n;
-  return res;
+  const n = resolvingRefs.length
+  const res = cb()
+  resolvingRefs.length = n
+  return res
 }
 
 function resolve(schema: OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject, apiGen: ApiGenerator) {
   if (isReference(schema)) {
     if (resolvingRefs.includes(schema.$ref)) {
-      console.warn(`circular reference for path ${[...resolvingRefs, schema.$ref].join(' -> ')} found`);
-      return {};
+      console.warn(
+        `circular reference for path ${[...resolvingRefs, schema.$ref].join(" -> ")} found`,
+      )
+      return {}
     }
-    resolvingRefs.push(schema.$ref);
+    resolvingRefs.push(schema.$ref)
   }
-  return { ...apiGen.resolve(schema) };
+  return { ...apiGen.resolve(schema) }
 }
 
-function recursiveResolveSchema(schema: OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject, apiGen: ApiGenerator) {
+function recursiveResolveSchema(
+  schema: OpenAPIV3.ReferenceObject | OpenAPIV3.SchemaObject,
+  apiGen: ApiGenerator,
+) {
   return autoPopRefs(() => {
-    const resolvedSchema = resolve(schema, apiGen) as OpenAPIV3.SchemaObject;
+    const resolvedSchema = resolve(schema, apiGen) as OpenAPIV3.SchemaObject
 
-    if (resolvedSchema.type === 'array') {
-      resolvedSchema.items = resolve(resolvedSchema.items, apiGen);
-      resolvedSchema.items = recursiveResolveSchema(resolvedSchema.items, apiGen);
-    } else if (resolvedSchema.type === 'object') {
-      if (!resolvedSchema.properties && typeof resolvedSchema.additionalProperties === 'object') {
+    if (resolvedSchema.type === "array") {
+      resolvedSchema.items = resolve(resolvedSchema.items, apiGen)
+      resolvedSchema.items = recursiveResolveSchema(resolvedSchema.items, apiGen)
+    } else if (resolvedSchema.type === "object") {
+      if (!resolvedSchema.properties && typeof resolvedSchema.additionalProperties === "object") {
         if (isReference(resolvedSchema.additionalProperties)) {
           resolvedSchema.additionalProperties = recursiveResolveSchema(
             resolve(resolvedSchema.additionalProperties, apiGen),
             apiGen,
-          );
+          )
         }
       }
 
       if (resolvedSchema.properties) {
         resolvedSchema.properties = Object.entries(resolvedSchema.properties).reduce(
           (resolved, [key, value]) => {
-            resolved[key] = recursiveResolveSchema(value, apiGen);
-            return resolved;
+            resolved[key] = recursiveResolveSchema(value, apiGen)
+            return resolved
           },
           {} as Record<string, OpenAPIV3.SchemaObject>,
-        );
+        )
       }
     }
 
     if (resolvedSchema.allOf) {
-      resolvedSchema.allOf = resolvedSchema.allOf.map(item => recursiveResolveSchema(item, apiGen));
+      resolvedSchema.allOf = resolvedSchema.allOf.map(item => recursiveResolveSchema(item, apiGen))
     } else if (resolvedSchema.oneOf) {
-      resolvedSchema.oneOf = resolvedSchema.oneOf.map(item => recursiveResolveSchema(item, apiGen));
+      resolvedSchema.oneOf = resolvedSchema.oneOf.map(item => recursiveResolveSchema(item, apiGen))
     } else if (resolvedSchema.anyOf) {
-      resolvedSchema.anyOf = resolvedSchema.anyOf.map(item => recursiveResolveSchema(item, apiGen));
+      resolvedSchema.anyOf = resolvedSchema.anyOf.map(item => recursiveResolveSchema(item, apiGen))
     }
 
-    return resolvedSchema;
-  });
+    return resolvedSchema
+  })
 }

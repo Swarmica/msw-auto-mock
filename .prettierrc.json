@@ -1,0 +1,12 @@
+{
+  "singleQuote": false,
+  "semi": false,
+  "endOfLine": "auto",
+  "quoteProps": "consistent",
+  "proseWrap": "always",
+  "trailingComma": "all",
+  "arrowParens": "avoid",
+  "tabWidth": 2,
+  "printWidth": 100,
+  "jsonRecursiveSort": true
+}
