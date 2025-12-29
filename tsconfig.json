@@ -12,5 +12,5 @@
     "noUnusedParameters": true
   },
   "include": ["src"],
-  "exclude": ["node_modules", "example", "dist"]
+  "exclude": ["node_modules", "dist"]
 }
