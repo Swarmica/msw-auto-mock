@@ -1,6 +1,6 @@
 {
   "name": "@swarmica/msw-auto-mock",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generate mock data from OpenAPI descriptions for msw",
   "main": "dist/cli.js",
   "bin": {
@@ -16,7 +16,7 @@
     "@apidevtools/swagger-parser": "10.1.0",
     "cac": "6.7.14",
     "cosmiconfig": "9.0.0",
-    "lodash": "4.17.21",
+    "lodash": "4.18.1",
     "prettier": "3.3.2",
     "swagger2openapi": "7.0.8",
     "ts-pattern": "5.2.0"
